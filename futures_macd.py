@@ -24,52 +24,6 @@ def compute_dual_channel(df, lt=90, st=25) -> pd.DataFrame:
         cols.append("macd_structure")
     return df[cols]
 
-# 计算MACD纯化状态并保存为一列
-# 约定：macd_purify列以数值表示纯化状态：
-#  -1 表示看跌纯化（bearish divergence）
-#   1 表示看涨纯化（bullish divergence）
-#   0 表示中性（未触发纯化条件）
-def compute_macd_purify_state(df) -> pd.DataFrame:
-    df = df.copy()
-    m = df["macd"]
-    prev = m.shift(1)
-    nxt = m.shift(-1)
-    peaks_idx = df[(prev < m) & (nxt < m) & (m > 0)].index
-    valleys_idx = df[(prev > m) & (nxt > m) & (m < 0)].index
-    vp = []
-    for i in range(1, len(peaks_idx)):
-        a, b = peaks_idx[i-1], peaks_idx[i]
-        if (m.loc[a:b] < 0).any():
-            vp.append(b)
-    if len(peaks_idx) > 0:
-        vp.insert(0, peaks_idx[0])
-    peaks = df.loc[vp]
-    vv = []
-    for i in range(1, len(valleys_idx)):
-        a, b = valleys_idx[i-1], valleys_idx[i]
-        if (m.loc[a:b] > 0).any():
-            vv.append(b)
-    if len(valleys_idx) > 0:
-        vv.insert(0, valleys_idx[0])
-    valleys = df.loc[vv]
-    df["macd_purify"] = 0
-    cur = df.iloc[-1]
-    state = 0
-    if len(peaks) >= 2:
-        p1, p2 = peaks.iloc[-2], peaks.iloc[-1]
-        cond1 = (cur["close"] > p2["close"]) and (cur["macd"] < p2["macd"]) 
-        cond2 = (cur["close"] > p1["close"]) and (cur["close"] > p2["close"]) and (cur["macd"] < p1["macd"]) 
-        if cond1 or cond2:
-            state = -1
-    if len(valleys) >= 2:
-        n1, n2 = valleys.iloc[-2], valleys.iloc[-1]
-        bcond1 = (cur["close"] < n2["close"]) and (cur["macd"] > n2["macd"]) 
-        bcond2 = (cur["close"] < n1["close"]) and (cur["close"] < n2["close"]) and (cur["macd"] > n1["macd"]) 
-        if bcond1 or bcond2:
-            state = 1
-    df.iloc[-1, df.columns.get_loc("macd_purify")] = state
-    return df
-
 
 # 纯化结构算法
 # 定义：基于死叉/金叉分段，比较相邻段的价格与DIF极值，判断“直接/隔峰”的纯化与结构确认
@@ -233,7 +187,6 @@ def main(argv=None):
 
     out = compute_dual_channel(out)
 
-    # out = compute_macd_purify_state(out)
     out = compute_macd_structure(out)
 
     if args.limit and args.limit > 0:
